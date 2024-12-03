@@ -14,9 +14,7 @@ const multer = require("multer");
 const path = require("path");
 app.use(express.static(path.join(__dirname, "client/build")));
 
-/*app.get("*", (req, res) => {
-    res.sendFile(path.join(__dirname, "client/build", "index.html"));
-});*/
+
 
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -905,6 +903,13 @@ app.get("/api/admin/group-students", (req, res) => {
         res.json(rows);
     });
 });
+
+
+
+app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "client/build", "index.html"));
+});
+
 
 const PORT = process.env.PORT || 5000;
 
