@@ -12,6 +12,7 @@ app.use(bodyParser.json());
 app.use(cors());
 const multer = require("multer");
 const path = require("path");
+app.use(express.static(path.join(__dirname, "client/build")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // Маршрут для авторизації
 app.post("/api/login", (req, res) => {
