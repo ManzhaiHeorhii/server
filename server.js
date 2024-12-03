@@ -14,9 +14,6 @@ const multer = require("multer");
 const path = require("path");
 app.use(express.static(path.join(__dirname, "client/build")));
 
-
-
-
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // Маршрут для авторизації
 app.post("/api/login", (req, res) => {
@@ -179,7 +176,7 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
         return res.status(400).json({ message: "No file uploaded" });
     }
 
-    const fileUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+    const fileUrl = `/uploads/${req.file.filename}`;
     res.json({ url: fileUrl });
 });
 
