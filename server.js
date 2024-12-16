@@ -984,6 +984,43 @@ app.get("/api/admin/group-students", (req, res) => {
 });
 
 
+app.delete("/api/admin/groups/:id", async (req, res) => {
+    const { id } = req.params;
+
+    const sqlDeleteStudents = `
+        DELETE FROM Group_Students
+        WHERE group_id = ?
+    `;
+    const sqlDeleteGroup = `
+        DELETE FROM Groups
+        WHERE group_id = ?
+    `;
+
+    db.serialize(() => {
+        db.run(sqlDeleteStudents, [id], function (err) {
+            if (err) {
+                console.error("Error deleting students from group:", err);
+                return res.status(500).json({ message: "Internal server error while deleting students." });
+            }
+        });
+
+        db.run(sqlDeleteGroup, [id], function (err) {
+            if (err) {
+                console.error("Error deleting group:", err);
+                return res.status(500).json({ message: "Internal server error while deleting group." });
+            }
+
+            if (this.changes === 0) {
+                return res.status(404).json({ message: "Group not found." });
+            }
+
+            res.status(200).json({ message: "Group deleted successfully." });
+        });
+    });
+});
+
+
+
 
 app.get("*", (req, res) => {
     res.sendFile(path.join(__dirname, "client/build", "index.html"));
