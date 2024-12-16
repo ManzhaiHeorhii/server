@@ -31,7 +31,7 @@ app.post("/api/login", (req, res) => {
             if (!user) {
                 return res.status(401).json({ message: "Invalid credentials" });
             }
-            console.log(user);
+
             // Генеруємо токен з роллю користувача
             const token = jwt.sign({ username: user.username, role: user.role, id: user.user_id }, SECRET_KEY, { expiresIn: "1h" });
             res.json({ token });
@@ -207,7 +207,7 @@ app.get("/api/tasks", (req, res) => {
 
 app.post("/api/tasks", (req, res) => {
     const { course_id, task_content } = req.body;
-    console.log(course_id, task_content);
+
     if (!course_id || !task_content) {
         return res.status(400).json({ message: "Course ID and task content are required" });
     }
@@ -364,6 +364,87 @@ app.get("/api/student/courses", (req, res) => {
         res.json(rows);
     });
 });
+app.post("/api/courses", async (req, res) => {
+    const { course_name, teacher_id } = req.body;
+
+    if (!course_name || !teacher_id) {
+        return res.status(400).json({ message: "Course name and teacher ID are required." });
+    }
+
+    const sql = `
+        INSERT INTO Courses (course_name, teacher_id)
+        VALUES (?, ?)
+    `;
+
+    db.run(sql, [course_name, teacher_id], function (err) {
+        if (err) {
+            console.error("Error adding course:", err);
+            return res.status(500).json({ message: "Internal server error." });
+        }
+        res.status(201).json({ course_id: this.lastID, course_name, teacher_id });
+    });
+});
+app.delete("/api/courses/:id", async (req, res) => {
+    const { id } = req.params;
+
+    const deleteSubmissionsSql = `
+        DELETE FROM Student_Task_Submissions
+        WHERE task_id IN (
+            SELECT task_id FROM Tasks WHERE course_id = ?
+        )
+    `;
+    const deleteTasksSql = `
+        DELETE FROM Tasks
+        WHERE course_id = ?
+    `;
+    const deleteGroupAssignmentsSql = `
+        DELETE FROM Group_Course_Assignments
+        WHERE course_id = ?
+    `;
+    const deleteCourseSql = `
+        DELETE FROM Courses
+        WHERE course_id = ?
+    `;
+
+    db.serialize(() => {
+        db.run(deleteSubmissionsSql, [id], function (err) {
+            if (err) {
+                console.error("Error deleting submissions:", err);
+                return res.status(500).json({ message: "Internal server error while deleting submissions." });
+            }
+        });
+
+        db.run(deleteTasksSql, [id], function (err) {
+            if (err) {
+                console.error("Error deleting tasks:", err);
+                return res.status(500).json({ message: "Internal server error while deleting tasks." });
+            }
+        });
+
+        db.run(deleteGroupAssignmentsSql, [id], function (err) {
+            if (err) {
+                console.error("Error deleting group assignments:", err);
+                return res.status(500).json({ message: "Internal server error while deleting group assignments." });
+            }
+        });
+
+        db.run(deleteCourseSql, [id], function (err) {
+            if (err) {
+                console.error("Error deleting course:", err);
+                return res.status(500).json({ message: "Internal server error while deleting course." });
+            }
+
+            if (this.changes === 0) {
+                return res.status(404).json({ message: "Course not found." });
+            }
+
+            res.status(200).json({ message: "Course and all related data deleted successfully." });
+        });
+    });
+});
+
+
+
 
 app.get("/api/student/available-courses", (req, res) => {
     const { student_id } = req.query;
@@ -384,15 +465,14 @@ app.get("/api/student/available-courses", (req, res) => {
             console.error("Error fetching available courses:", err);
             return res.status(500).json({ message: "Internal server error." });
         }
-        console.log(rows);
+
         res.json(rows);
     });
 });
 
 app.post("/api/student/complete-course", (req, res) => {
     const { student_id, course_id } = req.body;
-    console.log(course_id);
-    console.log(student_id);
+
     if (!student_id || !course_id) {
         return res.status(400).json({ message: "Student ID and Course ID are required." });
     }
@@ -528,6 +608,8 @@ app.get("/api/teacher/submissions", (req, res) => {
     if (!group_id || !course_id) {
         return res.status(400).json({ message: "Group ID and Course ID are required." });
     }
+    const groupId = parseInt(group_id, 10);
+    const courseId = parseInt(course_id, 10);
 
     const sql = `
         SELECT
@@ -537,19 +619,20 @@ app.get("/api/teacher/submissions", (req, res) => {
             SUM(CASE WHEN sts.grade IS NULL THEN 1 ELSE 0 END) AS ungraded_count
         FROM
             Group_Students gs
-                LEFT JOIN
+                JOIN
             Users u ON gs.student_id = u.user_id
                 LEFT JOIN
             Student_Task_Submissions sts ON gs.student_id = sts.student_id
                 LEFT JOIN
-            Tasks t ON sts.task_id = t.task_id AND t.course_id = ?
+            Tasks t ON sts.task_id = t.task_id
         WHERE
             gs.group_id = ?
+          AND (t.course_id = ? OR t.course_id IS NULL)
         GROUP BY
             gs.student_id, u.username;
     `;
 
-    db.all(sql, [course_id, group_id], (err, rows) => {
+    db.all(sql, [group_id, course_id], (err, rows) => {
         if (err) {
             console.error("Error fetching submissions:", err);
             return res.status(500).json({ message: "Internal server error." });
@@ -569,8 +652,7 @@ app.get("/api/teacher/review-tasks", (req, res) => {
     if (!student_id || !course_id) {
         return res.status(400).json({ message: "Student ID and Course ID are required." });
     }
-    console.log(JSON.stringify(student_id));
-    console.log(JSON.stringify(course_id));
+
     const sql = `
         SELECT
             t.task_id,
@@ -661,7 +743,7 @@ app.get("/api/teacher/groups", (req, res) => {
             console.error("Error fetching groups:", err);
             return res.status(500).json({ message: "Internal server error." });
         }
-console.log(JSON.stringify(rows));
+
         res.json(rows);
     });
 });
@@ -798,7 +880,7 @@ app.get("/api/admin/groups", (req, res) => {
             console.error("Error fetching groups:", err);
             return res.status(500).json({ message: "Internal server error." });
         }
-        console.log(rows);
+
         res.json(rows);
     });
 });
